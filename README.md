@@ -15,9 +15,7 @@ First you need to declare a dependency in your `dependencies.json` file:
     "download_name": "json-3.7.0.zip",
     "target": {
       "type": "interface",
-      "public_includes": [
-        "."
-      ]
+      "includes": "."
     }
   }
 }
@@ -90,7 +88,7 @@ Additionally, you can override just the zip file by setting `JSON_ZIP`.
 
 ## `dependencies.json` by example
 
-### Boost
+### [Boost](https://www.boost.org/)
 
 This example downloads the Boost source zip and configures it by building the `system` library.
 
@@ -105,17 +103,64 @@ This example downloads the Boost source zip and configures it by building the `s
       "srcs": [
         "libs/system/src/error_code.cpp"
       ],
-      "public_includes": [
-        "."
+      "includes": ".",
+      "defines": [
+        "BOOST_ALL_NO_LIB",
+        "BOOST_ASIO_NO_TYPEID"
       ],
-      "public_defines": {
-        "BOOST_ALL_NO_LIB": "1",
-        "BOOST_ASIO_NO_TYPEID": "1"
-      },
       "links": [
         "$<$<PLATFORM_ID:Windows>:bcrypt.dll>"
       ]
     }
+  }
+}
+```
+
+### [Catch2](https://github.com/catchorg/Catch2)
+
+This example will download and configure the Catch testing framework for compilation. Note that the `configure` directive is used to create a `.cpp` file for the runner and also note that the path is prefixed with `:`, this means that the generation will take place into a subdirectory in `${CMAKE_CURRENT_BINARY_DIR}`.
+
+Additionally, two `extra_cmake` paths are given to be included by CMake after the target is configured.
+
+```json
+{
+  "Catch2": {
+    "git": {
+      "repository": "https://github.com/catchorg/Catch2.git",
+      "tag": "c8db4e77c4c9aa20776db162e982f1af693ab8fe"
+    },
+    "configure": {
+      ":catch2.cpp": {
+        "type": "generate",
+        "content": "#include \"catch.hpp\""
+      }
+    },
+    "target": [
+      {
+        "type": "interface",
+        "includes": "single_include/catch2",
+        "defines": [
+          "CATCH_CONFIG_NO_CPP17_UNCAUGHT_EXCEPTIONS",
+          "CATCH_CONFIG_ENABLE_BENCHMARKING"
+        ],
+        "public_defines": {
+          "CATCH_CONFIG_CONSOLE_WIDTH": 300
+        }
+      },
+      {
+        "type": "object",
+        "name": "Runner",
+        "srcs": ":catch2.cpp",
+        "private_defines": [
+          "CATCH_CONFIG_MAIN"
+        ],
+        "links": "Catch2"
+      }
+    ],
+    "extra_cmake": [
+      "contrib/Catch.cmake",
+      "contrib/ParseAndAddCatchTests.cmake"
+    ]
   }
 }
 ```
@@ -133,12 +178,8 @@ This will [Naios/continuable](https://github.com/Naios/continuable) and it's dep
     },
     "target": {
       "type": "interface",
-      "public_includes": [
-        "include"
-      ],
-      "links": [
-        "Function2"
-      ]
+      "includes": "include",
+      "links": "Function2"
     }
   },
   "Function2": {
@@ -148,9 +189,7 @@ This will [Naios/continuable](https://github.com/Naios/continuable) and it's dep
     },
     "target": {
       "type": "interface",
-      "public_includes": [
-        "include"
-      ]
+      "includes": "include"
     }
   }
 }
@@ -174,9 +213,9 @@ This will download [Rogiel/PacketBuffer](https://github.com/Rogiel/PacketBuffer)
 }
 ```
 
-### Poco
+### [Poco](https://pocoproject.org/)
 
-This example will download the Poco library and include `Poco.cmake` for further configuration. You can use `Poco_SOURCE_DIR` and `Poco_BINARY_DIR` if needed to configure your target.
+This example will download the Poco library and include `/Poco.cmake` for further configuration. You can use `Poco_SOURCE_DIR` and `Poco_BINARY_DIR` if needed to configure your target. Note that the file is an absolute paht (starting with `/`). This means that CMakeDependency will include this dependency from `${PROJECT_SOURCE_DIR}`.
 
 This allows very flexible build configuration for dependencies.
 
@@ -188,8 +227,40 @@ This allows very flexible build configuration for dependencies.
     ],
     "target": {
       "type": "cmake",
-      "file": "Poco.cmake"
+      "file": "/Poco.cmake"
     }
+  }
+}
+```
+
+### [STB Image](https://github.com/nothings/stb)
+
+This example will download and configure STB Image for compilation. Note that the `configure` directive is used to create a `.c` file for compilation. Also note that the path is prefixed with `:`, this means that the generation will take place into a subdirectory in `${CMAKE_CURRENT_BINARY_DIR}`.
+
+```json
+{
+  "STB": {
+    "git": {
+      "repository": "https://github.com/nothings/stb.git",
+      "tag": "052dce117ed989848a950308bd99eef55525dfb1"
+    },
+    "configure": {
+      ":stb_image.c": {
+        "type": "generate",
+        "content": "#include <stb_image.h>"
+      }
+    },
+    "target": [
+      {
+        "type": "static",
+        "name": "Image",
+        "srcs": ":stb_image.c",
+        "private_defines": [
+          "STB_IMAGE_IMPLEMENTATION"
+        ],
+        "includes": "."
+      }
+    ]
   }
 }
 ```
