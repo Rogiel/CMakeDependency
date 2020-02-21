@@ -69,17 +69,18 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
         if glue is None:
             glue = ''
         if len(entries) != 0:
-            print(call + "(" + target_name + glue + " " + nl_indent +
+            print(call + "(" + target_name + (glue + " " if glue is not None else "") + nl_indent +
                   nl_indent.join(entries)
                   + ")")
 
-    def gen_cmake_target_attrs(call, attr_name, default_scope=public_decl_type, normalizer=None):
+    def gen_cmake_target_attrs(call, attr_name, default_scope=public_decl_type, normalizer=None, as_system=False):
         values = []
+
         values += gen_entry(default_scope, target_info.get(attr_name), normalizer=normalizer)
         values += gen_entry(public_decl_type, target_info.get("public_" + attr_name), normalizer=normalizer)
         values += gen_entry('PRIVATE', target_info.get("private_" + attr_name), normalizer=normalizer)
         values += gen_entry('INTERFACE', target_info.get("interface_" + attr_name), normalizer=normalizer)
-        gen_cmake_call(call, values)
+        gen_cmake_call(call, values, glue=' SYSTEM' if as_system else '')
 
     def gen_cmake_target_props(call, attr_name, glue=None):
         if not attr_name in target_info:
@@ -97,7 +98,8 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
 
     # gen_cmake_target_attrs('target_sources', 'srcs', suffix=src_dir, default_scope='PRIVATE')
     gen_cmake_target_attrs('target_include_directories', 'includes',
-                           normalizer=lambda x: target_relative_path(x, name))
+                           normalizer=lambda x: target_relative_path(x, name),
+                           as_system=True)
     gen_cmake_target_attrs('target_compile_definitions', 'defines', normalizer=cmake_define_kv)
     gen_cmake_target_attrs('target_compile_options', 'options')
     gen_cmake_target_attrs('target_compile_features', 'features')
