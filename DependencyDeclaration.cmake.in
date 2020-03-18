@@ -1,26 +1,37 @@
-set(@DEPENDENCY_NAME@_URL
-        "@DEPENDENCY_URL@"
-        CACHE STRING "A path that points to a @DEPENDENCY_NAME@ URL to be downloaded. CMake will use this URL to download the file if needed.")
-set(@DEPENDENCY_NAME@_DIR
-        ${CMDEP_ROOT_DIR}/@DEPENDENCY_NAME@
-        CACHE PATH "A path that points to a @DEPENDENCY_NAME@ directory containing it's sources.")
+set(@DEPENDENCY_NAME@_URL "@DEPENDENCY_URL@")
+set(@DEPENDENCY_NAME@_DIR ${CMDEP_ROOT_DIR}/@DEPENDENCY_NAME@)
 set(@DEPENDENCY_NAME@_LOCK ${CMDEP_ROOT_DIR})
+set(@DEPENDENCY_NAME@_DOT_CMDEP_SOURCE_FILE "${@DEPENDENCY_NAME@_DIR}/.cmdep-source")
 
 set(@DEPENDENCY_NAME@_SOURCE_DIR
-        ${@DEPENDENCY_NAME@_DIR}
-        CACHE PATH "A path that points to a @DEPENDENCY_NAME@ source directory. If manually set, no downloading or extraction will take place and this will be used instead.")
+        ${@DEPENDENCY_NAME@_DIR} CACHE PATH
+        "A path that points to a @DEPENDENCY_NAME@ source directory. If manually set, no downloading or extraction will take place and this will be used instead.")
 set(@DEPENDENCY_NAME@_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/@DEPENDENCY_NAME@)
 
-get_filename_component(@DEPENDENCY_NAME@_DOWNLOAD_NAME "${@DEPENDENCY_NAME@_URL}" NAME CACHE)
-set(@DEPENDENCY_NAME@_ZIP
-        ${CMDEP_ZIP_DIR}/${@DEPENDENCY_NAME@_DOWNLOAD_NAME}
-        CACHE PATH "A path that points to a @DEPENDENCY_NAME@ zip file. If this file does not exists, it will be downloaded.")
+get_filename_component(@DEPENDENCY_NAME@_DOWNLOAD_NAME "${@DEPENDENCY_NAME@_URL}" NAME)
+set(@DEPENDENCY_NAME@_ZIP ${CMDEP_ZIP_DIR}/${@DEPENDENCY_NAME@_DOWNLOAD_NAME})
 
 # To prevent other concurrent CMake instances from trying to download or extract
 # the file, we lock the source directory. This will guarantee that only a single
 # CMake instance downloads or extracts a file.
 #
 file(LOCK ${@DEPENDENCY_NAME@_LOCK} DIRECTORY GUARD FILE)
+
+if(@DEPENDENCY_NAME@_SOURCE_DIR STREQUAL @DEPENDENCY_NAME@_DIR)
+    if(EXISTS "${@DEPENDENCY_NAME@_DOT_CMDEP_SOURCE_FILE}")
+        file(READ "${@DEPENDENCY_NAME@_DOT_CMDEP_SOURCE_FILE}" @DEPENDENCY_NAME@_CURRENT_SOURCE_URL)
+        if(NOT @DEPENDENCY_NAME@_CURRENT_SOURCE_URL STREQUAL @DEPENDENCY_NAME@_URL)
+            set(@DEPENDENCY_NAME@_SOURCE_CHANGED TRUE)
+        endif()
+    else()
+        set(@DEPENDENCY_NAME@_SOURCE_CHANGED TRUE)
+    endif()
+endif()
+
+if(@DEPENDENCY_NAME@_SOURCE_CHANGED)
+    message(STATUS "@DEPENDENCY_NAME@: Source has changed. Redownloading...")
+    file(REMOVE_RECURSE ${@DEPENDENCY_NAME@_DIR})
+endif()
 
 if(NOT EXISTS ${@DEPENDENCY_NAME@_SOURCE_DIR})
     if(NOT EXISTS ${@DEPENDENCY_NAME@_ZIP})
@@ -87,6 +98,13 @@ if(NOT EXISTS ${@DEPENDENCY_NAME@_SOURCE_DIR})
     #
     message(STATUS "@DEPENDENCY_NAME@: extracting... [clean up]")
     file(REMOVE_RECURSE "${tmp_dir}")
+
+    file(WRITE "${@DEPENDENCY_NAME@_DOT_CMDEP_SOURCE_FILE}" "${@DEPENDENCY_NAME@_URL}")
+
+    set(@DEPENDENCY_NAME@_SOURCE_DIR
+            ${@DEPENDENCY_NAME@_DIR} CACHE PATH
+            "A path that points to a @DEPENDENCY_NAME@ source directory. If manually set, no downloading or extraction will take place and this will be used instead."
+            FORCE)
 endif()
 
 # We are now done. We can unlock the CMake directory and proceed.

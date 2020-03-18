@@ -41,8 +41,6 @@ function(import_dependencies_from_json json)
 
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
-        list(APPEND CMAKE_CONFIGURE_DEPENDS ${json_dep_file})
-
         file(LOCK ${CMAKE_CURRENT_SOURCE_DIR} DIRECTORY GUARD FILE)
         if(${json_dep_file}          IS_NEWER_THAN ${cmake_dep_file} OR
            ${CMDEP_GENERATOR_SCRIPT} IS_NEWER_THAN ${cmake_dep_file})
@@ -56,6 +54,8 @@ function(import_dependencies_from_json json)
         message(STATUS "Python interpreter not found. CMake dependencies will NOT update automatically.")
     endif()
     include(${cmake_dep_file})
+
+    list(APPEND CMAKE_CONFIGURE_DEPENDS ${json_dep_file})
 endfunction()
 
 list(APPEND CMAKE_CONFIGURE_DEPENDS ${CMDEP_GENERATOR_SCRIPT})
