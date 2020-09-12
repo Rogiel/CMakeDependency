@@ -215,6 +215,14 @@ for (name, dep_info) in j.items():
                 for (var_name, value) in target_info["cache"].items():
                     if isinstance(value, bool):
                         print("set(" + var_name + " " + ("ON" if value else "OFF") + " CACHE INTERNAL \"\" FORCE)")
+
+            project_name = target_info['project_name'] if "project_name" in target_info else None
+            if project_name is not None:
+                if "include" in target_info:
+                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE " + to_cmake_datatype(target_relative_path(target_info['include'], name)) + ")")
+                if "include_before" in target_info:
+                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE_BEFORE " + to_cmake_datatype(target_relative_path(target_info['include_before'], name)) + ")")
+
             print("add_subdirectory(${" + target_name + "_SOURCE_DIR} ${" + target_name + "_BINARY_DIR})")
         elif target_type == "cmake":
             print("include(${PROJECT_SOURCE_DIR}/" + target_info["file"] + ")")

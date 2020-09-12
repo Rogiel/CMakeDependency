@@ -8,7 +8,9 @@ set(@DEPENDENCY_NAME@_SOURCE_DIR
         "A path that points to a @DEPENDENCY_NAME@ source directory. If manually set, no downloading or extraction will take place and this will be used instead.")
 set(@DEPENDENCY_NAME@_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/@DEPENDENCY_NAME@)
 
-get_filename_component(@DEPENDENCY_NAME@_DOWNLOAD_NAME "${@DEPENDENCY_NAME@_URL}" NAME)
+if(NOT @DEPENDENCY_NAME@_DOWNLOAD_NAME)
+    get_filename_component(@DEPENDENCY_NAME@_DOWNLOAD_NAME "${@DEPENDENCY_NAME@_URL}" NAME)
+endif()
 set(@DEPENDENCY_NAME@_ZIP ${CMDEP_ZIP_DIR}/${@DEPENDENCY_NAME@_DOWNLOAD_NAME})
 
 # To prevent other concurrent CMake instances from trying to download or extract

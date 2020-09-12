@@ -55,7 +55,7 @@ function(import_dependencies_from_json json)
     endif()
     include(${cmake_dep_file})
 
-    list(APPEND CMAKE_CONFIGURE_DEPENDS ${json_dep_file})
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${json_dep_file})
 endfunction()
 
 list(APPEND CMAKE_CONFIGURE_DEPENDS ${CMDEP_GENERATOR_SCRIPT})
