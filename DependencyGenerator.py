@@ -65,11 +65,15 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
 
         return list(map(lambda x: decl + " " + normalizer(x), values))
 
-    def gen_cmake_call(call, entries, glue=None):
+    def gen_cmake_call(call, entries, glue=None, where=None):
         if glue is None:
             glue = ''
+
+        if where is None:
+            where = target_name
+
         if len(entries) != 0:
-            print(call + "(" + target_name + (glue + " " if glue is not None else "") + nl_indent +
+            print(call + "(" + where + (glue + " " if glue is not None else "") + nl_indent +
                   nl_indent.join(entries)
                   + ")")
 
@@ -108,6 +112,15 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
     gen_cmake_target_attrs('target_link_options', 'link_options')
     gen_cmake_target_attrs('target_precompile_headers', 'precompile_headers')
     gen_cmake_target_props('set_target_properties', 'properties', ' PROPERTIES')
+
+    if "unity" in target_info and target_info["unity"]:
+        gen_cmake_call("set_target_properties", [
+            "UNITY_BUILD ON",
+            "UNITY_BUILD_MODE GROUP"
+        ], glue=" PROPERTIES")
+        gen_cmake_call("set_source_files_properties", [
+            "UNITY_GROUP " + target_name
+        ], glue=" PROPERTIES", where=srcs)
 
 
 def enumerate_srcs(name, target_name, srcs):
@@ -173,8 +186,10 @@ for (name, dep_info) in j.items():
             elif configure_type == 'generate':
                 print('file(GENERATE'
                       + (nl_indent + 'OUTPUT ' + to_cmake_datatype(target_relative_path(conf_name, name)))
-                      + (nl_indent + 'CONTENT ' + to_cmake_datatype(configure['content']) if 'content' in configure else '')
-                      + (nl_indent + 'INPUT ' + to_cmake_datatype((target_relative_path(configure['input'], name))) if 'input' in configure else '')
+                      + (nl_indent + 'CONTENT ' + to_cmake_datatype(
+                    configure['content']) if 'content' in configure else '')
+                      + (nl_indent + 'INPUT ' + to_cmake_datatype(
+                    (target_relative_path(configure['input'], name))) if 'input' in configure else '')
                       + (nl_indent + 'CONDITION  ' + configure['condition'] if 'condition' in configure else '')
                       + ')')
             else:
@@ -219,13 +234,22 @@ for (name, dep_info) in j.items():
             project_name = target_info['project_name'] if "project_name" in target_info else None
             if project_name is not None:
                 if "include" in target_info:
-                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE " + to_cmake_datatype(target_relative_path(target_info['include'], name)) + ")")
+                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE " + to_cmake_datatype(
+                        target_relative_path(target_info['include'], name)) + ")")
                 if "include_before" in target_info:
-                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE_BEFORE " + to_cmake_datatype(target_relative_path(target_info['include_before'], name)) + ")")
+                    print("set(CMAKE_PROJECT_" + project_name + "_INCLUDE_BEFORE " + to_cmake_datatype(
+                        target_relative_path(target_info['include_before'], name)) + ")")
 
             print("add_subdirectory(${" + target_name + "_SOURCE_DIR} ${" + target_name + "_BINARY_DIR})")
         elif target_type == "cmake":
             print("include(${PROJECT_SOURCE_DIR}/" + target_info["file"] + ")")
+        elif target_type == "external":
+            print("include(ExternalProject)")
+            print("ExternalProject_Add(" + target_name)
+            print(nl_indent + "SOURCE_DIR " + src_dir)
+            for name, value in target_info["options"].items():
+                print(nl_indent + name + " " + to_cmake_datatype(value))
+            print(")")
 
         if target_type in ["static", "interface", "object"]:
             generate_target_definition(
@@ -238,11 +262,14 @@ for (name, dep_info) in j.items():
             print()
 
     done_nl = False
+
+
     def do_nl():
         global done_nl
         if not done_nl:
             print()
             done_nl = True
+
 
     if "aliases" in dep_info:
         do_nl()
