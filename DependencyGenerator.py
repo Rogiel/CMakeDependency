@@ -100,11 +100,15 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
             return item[0]
         return item[0] + '=' + to_cmake_datatype(item[1])
 
+    def cmake_define_wrap_transform(item):
+        value = cmake_define_kv(item)
+        return '$<$<COMPILE_LANGUAGE:CXX,C>:' + value + '>'
+
     # gen_cmake_target_attrs('target_sources', 'srcs', suffix=src_dir, default_scope='PRIVATE')
     gen_cmake_target_attrs('target_include_directories', 'includes',
                            normalizer=lambda x: target_relative_path(x, name),
                            as_system=True)
-    gen_cmake_target_attrs('target_compile_definitions', 'defines', normalizer=cmake_define_kv)
+    gen_cmake_target_attrs('target_compile_definitions', 'defines', normalizer=cmake_define_wrap_transform)
     gen_cmake_target_attrs('target_compile_options', 'options')
     gen_cmake_target_attrs('target_compile_features', 'features')
     gen_cmake_target_attrs('target_link_libraries', 'links')
