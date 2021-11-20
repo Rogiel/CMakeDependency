@@ -2,7 +2,7 @@ import json, sys
 from urllib.parse import urlparse
 
 tab = " " * 4
-nl_indent = "\n" + tab * 2
+nl_indent = "\n" + tab * 1
 
 
 def target_relative_path(path, name=None, src_dir=None, bin_dir=None):
@@ -51,7 +51,26 @@ def to_cmake_datatype(value):
         return escape_str(str(value))
 
 
-def generate_target_definition(name, target_name, public_decl_type, src_dir, target_info):
+def gen_cmake_call(call, entries, glue=None, where=None):
+    if glue is None:
+        glue = ''
+
+    if where is None:
+        where = target_name
+    if isinstance(where, list):
+        where = " ".join(where)
+
+    discriminator = None
+    if isinstance(call, tuple):
+        discriminator = call[1]
+        call = call[0]
+
+    if len(entries) != 0:
+        print(call + "(" + (discriminator + " " if discriminator is not None else "") + where + (glue + " " if glue is not None else "") + nl_indent +
+              nl_indent.join(entries)
+              + ")")
+
+def generate_target_definition(name, target_name, target_base_name, public_decl_type, src_dir, target_info, headers):
     def gen_entry(decl, values, normalizer=None):
         if values is None or len(values) == 0:
             return []
@@ -63,19 +82,7 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
         if isinstance(values, dict):
             values = values.items()
 
-        return list(map(lambda x: decl + " " + normalizer(x), values))
-
-    def gen_cmake_call(call, entries, glue=None, where=None):
-        if glue is None:
-            glue = ''
-
-        if where is None:
-            where = target_name
-
-        if len(entries) != 0:
-            print(call + "(" + where + (glue + " " if glue is not None else "") + nl_indent +
-                  nl_indent.join(entries)
-                  + ")")
+        return list(map(lambda x: (decl + " " if decl is not None else "") + normalizer(x), values))
 
     def gen_cmake_target_attrs(call, attr_name, default_scope=public_decl_type, normalizer=None, as_system=False):
         values = []
@@ -102,7 +109,7 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
 
     # gen_cmake_target_attrs('target_sources', 'srcs', suffix=src_dir, default_scope='PRIVATE')
     gen_cmake_target_attrs('target_include_directories', 'includes',
-                           normalizer=lambda x: target_relative_path(x, name),
+                           normalizer=lambda x: '$<BUILD_INTERFACE:' + target_relative_path(x, name) + '>',
                            as_system=True)
     gen_cmake_target_attrs('target_compile_definitions', 'defines', normalizer=cmake_define_kv)
     gen_cmake_target_attrs('target_compile_options', 'options')
@@ -113,6 +120,10 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
     gen_cmake_target_attrs('target_precompile_headers', 'precompile_headers')
     gen_cmake_target_props('set_target_properties', 'properties', ' PROPERTIES')
 
+    gen_cmake_call("set_target_properties", [
+        "EXPORT_NAME " + target_base_name,
+    ], glue=" PROPERTIES")
+
     if "unity" in target_info and target_info["unity"]:
         gen_cmake_call("set_target_properties", [
             "UNITY_BUILD ON",
@@ -122,8 +133,68 @@ def generate_target_definition(name, target_name, public_decl_type, src_dir, tar
             "UNITY_GROUP " + target_name
         ], glue=" PROPERTIES", where=srcs)
 
+    gen_cmake_call(('install', 'TARGETS'), [
+        'EXPORT ' + name + 'Targets',
+        'RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}',
+        'ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}',
+        'INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}',
+        'LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}',
+    ])
+    # gen_cmake_call(('export', 'TARGETS'), [
+    #     'APPEND FILE ${PROJECT_BINARY_DIR}/'+name+'-target.cmake',
+    #     'NAMESPACE ' + name
+    # ], where=target_name)
 
-def enumerate_srcs(name, target_name, srcs):
+    if 'install' in target_info:
+        install_info = target_info['install']
+
+        def gen_install_dir(key, type):
+            if key in install_info:
+                for (dir, patterns) in install_info[key].items():
+                    if patterns is None or patterns == True or len(patterns) == 0:
+                        patterns = ['*.h', '*.hpp', '*.inl', '*.hxx', '*.hh']
+
+                    gen_cmake_call(('install', 'DIRECTORY'), [
+                        'TYPE ' + type,
+                        'FILES_MATCHING'
+                    ] + list(map(lambda x: 'PATTERN '+x, patterns)), where=target_relative_path(dir, name))
+        gen_install_dir('includes', 'INCLUDE')
+
+    # else:
+    # values = gen_entry(None, target_info.get('includes'), normalizer=lambda x: target_relative_path(x, name) + '/')
+    # gen_cmake_call(('install', 'DIRECTORY'), [
+    #     'TYPE INCLUDE',
+    #     'FILES_MATCHING',
+    #     'PATTERN *.h',
+    #     'PATTERN *.hpp'
+    # ], where=values[0])
+
+    if headers is not None:
+        gen_cmake_call(('install', 'FILES'), [
+            'TYPE INCLUDE'
+        ], where=headers)
+
+    # gen_cmake_call(call, values, glue=' SYSTEM' if as_system else '')
+
+    #     print("install(TARGETS " + target_name + '''
+    # RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    # ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    # INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    # LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    #         ''')
+    #
+    #     if 'includes' in target_info:
+    #         for include in target_info['includes']:
+    #             print("install(DIRECTORY " + target_relative_path(include, name) + " DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}\
+    #                 FILES_MATCHING PATTERN *.h)")
+
+
+
+
+def enumerate_srcs(name, target_name, srcs, suffix='_SRCS'):
+    if srcs is None:
+        return None
+
     if isinstance(srcs, str):
         srcs = [srcs]
     target_name = target_name.replace('.', '_')
@@ -133,9 +204,9 @@ def enumerate_srcs(name, target_name, srcs):
 
     paths = list(map(lambda x: target_relative_path(x, name), paths))
     if len(globs) != 0:
-        print("file(GLOB_RECURSE " + target_name + "_SRCS CONFIGURE_DEPENDS " + (nl_indent).join(
+        print("file(GLOB_RECURSE " + target_name + suffix + " CONFIGURE_DEPENDS " + (nl_indent).join(
             map(lambda x: target_relative_path(x, name), globs)) + ")")
-        paths = ["${" + target_name + "_SRCS}"] + paths
+        paths = ["${" + target_name + suffix + "}"] + paths
 
     return (nl_indent).join(paths)
 
@@ -172,6 +243,9 @@ for (name, dep_info) in j.items():
     print("# -- Dependency: " + name)
     print(generate_dependency_decl(name, dep_args))
 
+    if 'include' in dep_info:
+        print("include(" + target_relative_path(dep_info['include'], name) + ")")
+
     if 'configure' in dep_info:
         configures = dep_info['configure']
         for (conf_name, configure) in configures.items():
@@ -205,17 +279,18 @@ for (name, dep_info) in j.items():
     for target_n, target_info in enumerate(target_infos):
         public_decl_type = "PUBLIC"
 
-        target_name = name
+        target_name = target_base_name = name
         if 'name' in target_info:
-            target_name = name + '.' + target_info['name']
+            target_base_name = target_info['name']
+            target_name = name + '.' + target_base_name
         target_type = target_info["type"]
 
         if target_type == "static":
             srcs = enumerate_srcs(name, target_name, srcs=target_info["srcs"])
-            print("add_library(" + target_name + " STATIC EXCLUDE_FROM_ALL" + nl_indent + srcs + ")")
+            print("add_library(" + target_name + " STATIC " + nl_indent + srcs + ")")
         if target_type == "shared":
             srcs = enumerate_srcs(name, target_name, srcs=target_info["srcs"])
-            print("add_library(" + target_name + " SHARED EXCLUDE_FROM_ALL" + nl_indent + srcs + ")")
+            print("add_library(" + target_name + " SHARED " + nl_indent + srcs + ")")
         if target_type == "object":
             srcs = enumerate_srcs(name, target_name, srcs=target_info["srcs"])
             print("add_library(" + target_name + " OBJECT" + nl_indent + srcs + ")")
@@ -230,6 +305,8 @@ for (name, dep_info) in j.items():
                 for (var_name, value) in target_info["cache"].items():
                     if isinstance(value, bool):
                         print("set(" + var_name + " " + ("ON" if value else "OFF") + " CACHE INTERNAL \"\" FORCE)")
+                    else:
+                        print("set(" + var_name + " " + value + " CACHE INTERNAL \"\" FORCE)")
 
             project_name = target_info['project_name'] if "project_name" in target_info else None
             if project_name is not None:
@@ -252,11 +329,20 @@ for (name, dep_info) in j.items():
             print(")")
 
         if target_type in ["static", "interface", "object"]:
+            headers = enumerate_srcs(name, target_name, srcs=target_info.get("headers"), suffix='_HEADERS')
             generate_target_definition(
-                name, target_name,
+                name, target_name, target_base_name,
                 public_decl_type=public_decl_type,
                 target_info=target_info,
-                src_dir=src_dir)
+                src_dir=src_dir,
+                headers=headers)
+
+            gen_cmake_call(('export', 'PACKAGE'), [], where=name)
+            gen_cmake_call(('install', 'EXPORT'), [
+                'FILE ' + name + 'Config.cmake',
+                'NAMESPACE ' + name + '::',
+                'DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/' + name,
+                ], where=name + 'Targets')
 
         if target_n != len(target_infos) - 1:
             print()
